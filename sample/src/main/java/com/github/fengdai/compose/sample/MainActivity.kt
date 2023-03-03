@@ -50,8 +50,9 @@ fun Solution1() {
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                Log.d("NestedScroll", "onPreScroll: $available")
-                return if (available.y < 0) {
+                val oldOffsetY = offsetY
+                Log.d("NestedScroll", "     onPreScroll: $available")
+                return if (available.y < 0 || offsetY > minOffsetY) {
                     val absoluteY = offsetY + available.y + accumulator
                     val newOffsetY = absoluteY.coerceIn(minOffsetY.toFloat(), 0f)
                     val changed = absoluteY != newOffsetY
@@ -59,6 +60,11 @@ fun Solution1() {
                     val consumedYInt = consumedY.roundToInt()
                     offsetY += consumedYInt
                     accumulator = consumedY - consumedYInt
+                    val dy = offsetY - oldOffsetY
+                    Log.d(
+                        "NestedScroll",
+                        "     onPreScroll: offsetY $offsetY ${if (dy > 0) "↓" else "↑"} $dy"
+                    )
                     if (changed) available.copy(y = consumedY) else available
                 } else super.onPreScroll(available, source)
             }

@@ -72,13 +72,17 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
 
     private OverScroller mScroller;
 
-    /** @hide */
+    /**
+     * @hide
+     */
     @RestrictTo(LIBRARY)
     @VisibleForTesting
     @NonNull
     public EdgeEffect mEdgeGlowTop;
 
-    /** @hide */
+    /**
+     * @hide
+     */
     @RestrictTo(LIBRARY)
     @VisibleForTesting
     @NonNull
@@ -211,7 +215,10 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
 
                 final int y = (int) ev.getY(activePointerIndex);
                 int deltaY = mLastMotionY - y;
+                String upOrDown = deltaY < 0 ? "↓" : "↑";
+                Log.d("NestedScroll", ">> " + upOrDown + " deltaY: " + deltaY + "; mLastMotionY: " + mLastMotionY + "; y: " + y);
                 deltaY -= releaseVerticalGlow(deltaY, ev.getX(activePointerIndex));
+                Log.d("NestedScroll", "     deltaY: " + deltaY);
                 if (!mIsBeingDragged && Math.abs(deltaY) > mTouchSlop) {
                     final ViewParent parent = getParent();
                     if (parent != null) {
@@ -224,16 +231,23 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
                         deltaY += mTouchSlop;
                     }
                 }
+                Log.d("NestedScroll", "     deltaY: " + deltaY);
                 if (mIsBeingDragged) {
                     // Start with nested pre scrolling
+                    Log.d("NestedScroll", "     dispatchNestedPreScroll");
                     if (dispatchNestedPreScroll(0, deltaY, mScrollConsumed, mScrollOffset,
                             ViewCompat.TYPE_TOUCH)) {
                         deltaY -= mScrollConsumed[1];
+                        Log.d("NestedScroll", "     deltaY: " + deltaY + "; -mScrollConsumed[1]: " + mScrollConsumed[1]);
+                        Log.d("NestedScroll", "        mNestedYOffset: " + mNestedYOffset);
+                        Log.d("NestedScroll", "      + mScrollOffset[1]: " + mScrollOffset[1]);
                         mNestedYOffset -= mScrollConsumed[1];
+                        Log.d("NestedScroll", "      = mNestedYOffset: " + mNestedYOffset);
                     }
 
                     // Scroll to follow the motion event
                     mLastMotionY = y + mScrollConsumed[1];
+                    Log.d("NestedScroll", "     deltaY: " + deltaY + "; mLastMotionY: (" + mLastMotionY + ") = y: (" + y + ") -  mScrollOffset[1]: (" + mScrollOffset[1] + ")");
 
                     final int oldY = getScrollY();
                     final int range = getScrollRange();
@@ -257,6 +271,7 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
 
                     mLastMotionY += mScrollConsumed[1];
                     mNestedYOffset -= mScrollConsumed[1];
+                    Log.d("NestedScroll", "     mNestedYOffset: " + mNestedYOffset);
 
                     if (canOverscroll) {
                         deltaY -= mScrollConsumed[1];
@@ -408,8 +423,8 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
      * deltaY on the edge glow.
      *
      * @param deltaY The pointer motion, in pixels, in the vertical direction, positive
-     *                         for moving down and negative for moving up.
-     * @param x The vertical position of the pointer.
+     *               for moving down and negative for moving up.
+     * @param x      The vertical position of the pointer.
      * @return The amount of <code>deltaY</code> that has been consumed by the
      * edge glow.
      */

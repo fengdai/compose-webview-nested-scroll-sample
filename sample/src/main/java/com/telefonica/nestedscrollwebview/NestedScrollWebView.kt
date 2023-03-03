@@ -216,4 +216,8 @@ open class NestedScrollWebView : WebView, NestedScrollingChild3 {
 
     override fun dispatchNestedPreFling(velocityX: Float, velocityY: Float): Boolean =
         nestedScrollingChildHelper.dispatchNestedPreFling(velocityX, velocityY)
+
+    fun fling(velocityY: Int) {
+        nestedScrollingChildHelper.fling(velocityY)
+    }
 }

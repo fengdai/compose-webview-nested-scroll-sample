@@ -1,17 +1,17 @@
 package com.github.fengdai.compose.sample
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -19,7 +19,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.node.Ref
+import androidx.compose.ui.unit.Constraints.Companion.Infinity
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
@@ -33,111 +34,143 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            Solution1()
+            Commodity(
+                topContent = {
+                    Box(
+                        modifier = Modifier
+                            .height(500.dp)
+                            .fillMaxWidth()
+                            .background(Brush.verticalGradient(listOf(Color.White, Color.Black)))
+                    )
+                }
+            )
         }
     }
 }
 
 @Composable
-fun Solution1() {
-    val coroutineScope = rememberCoroutineScope()
-    var minOffsetY by remember { mutableStateOf(0) }
-    var offsetY by remember { mutableStateOf(0) }
-    var accumulator by remember { mutableStateOf(0f) }
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                val oldOffsetY = offsetY
-                Log.d("NestedScroll", "     onPreScroll: $available")
-                return if (available.y < 0 || offsetY > minOffsetY) {
-                    val absoluteY = offsetY + available.y + accumulator
-                    val newOffsetY = absoluteY.coerceIn(minOffsetY.toFloat(), 0f)
-                    val changed = absoluteY != newOffsetY
-                    val consumedY = newOffsetY - offsetY
-                    val consumedYInt = consumedY.roundToInt()
-                    offsetY += consumedYInt
-                    accumulator = consumedY - consumedYInt
-                    val dy = offsetY - oldOffsetY
-                    Log.d(
-                        "NestedScroll",
-                        "     onPreScroll: offsetY $offsetY ${if (dy > 0) "↓" else "↑"} $dy"
-                    )
-                    if (changed) available.copy(y = consumedY) else available
-                } else super.onPreScroll(available, source)
-            }
+fun rememberCommodityState(): CommodityState {
+    return remember { CommodityState() }
+}
 
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                Log.d("NestedScroll", "onPostScroll: consumed: $consumed; available: $available")
-                return if (available.y > 0) {
-                    val absoluteY = offsetY + available.y + accumulator
-                    val newOffsetY = absoluteY.coerceIn(minOffsetY.toFloat(), 0f)
-                    val changed = absoluteY != newOffsetY
-                    val consumedY = newOffsetY - offsetY
-                    val consumedYInt = consumedY.roundToInt()
-                    offsetY += consumedYInt
-                    accumulator = consumedY - consumedYInt
-                    if (changed) available.copy(y = consumedY) else available
-                } else super.onPostScroll(consumed, available, source)
+class CommodityState {
+    var offsetY by mutableStateOf(0)
+        private set
+    var minOffsetY: Int
+        get() = _minOffsetYState.value
+        internal set(newMin) {
+            _minOffsetYState.value = newMin
+            if (offsetY < newMin) {
+                offsetY = newMin
             }
         }
+    private var _minOffsetYState = mutableStateOf(Int.MIN_VALUE)
+    private var accumulator: Float = 0f
+
+    val isScrollEnable get() = offsetY > minOffsetY
+
+    val scrollableState = ScrollableState {
+        val absolute = (offsetY + it + accumulator)
+        val newValue = absolute.coerceIn(minOffsetY.toFloat(), 0f)
+        val changed = absolute != newValue
+        val consumed = newValue - offsetY
+        val consumedInt = consumed.roundToInt()
+        offsetY += consumedInt
+        accumulator = consumed - consumedInt
+
+        // Avoid floating-point rounding error
+        if (changed) consumed else it
     }
+
+    val nestedScrollConnection = object : NestedScrollConnection {
+        override fun onPreScroll(
+            available: Offset,
+            source: NestedScrollSource
+        ): Offset {
+            return if (available.y < 0 || offsetY > minOffsetY) consume(available)
+            else super.onPreScroll(available, source)
+        }
+
+        override fun onPostScroll(
+            consumed: Offset,
+            available: Offset,
+            source: NestedScrollSource
+        ): Offset {
+            return if (available.y > 0) consume(available)
+            else super.onPostScroll(consumed, available, source)
+        }
+    }
+
+    private fun consume(available: Offset): Offset {
+        val consumedY = scrollableState.dispatchRawDelta(available.y)
+        return available.copy(y = consumedY)
+    }
+}
+
+@Composable
+fun Commodity(
+    state: CommodityState = rememberCommodityState(),
+    topContent: @Composable () -> Unit
+) {
+    val webViewRef = remember { Ref<NestedScrollWebView>() }
+    val flingBehavior = ScrollableDefaults.flingBehavior()
     Layout(
         content = {
-            Box(
-                modifier = Modifier
-                    .height(500.dp)
-                    .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.White, Color.Black)))
-                    .verticalScroll(rememberScrollState())
-            )
+            topContent()
             WebView(
                 state = rememberWebViewState(url = "https://www.google.com.hk/search?q=nestedscroll+compose"),
                 onCreated = {
+                    webViewRef.value = it as NestedScrollWebView
                     ViewCompat.setNestedScrollingEnabled(it, true)
                 },
-                factory = ::NestedScrollWebView
+                onDispose = {
+                    webViewRef.value = null
+                },
+                factory = ::NestedScrollWebView,
+                modifier = Modifier.alpha(0.99f)
             )
-//            AndroidView(
-//                factory = {
-//                    NestedScrollView(it).apply {
-//                        addView(
-//                            View(it).apply {
-//                                setBackgroundColor(Color.Red.toArgb())
-//                            },
-//                            ViewGroup.LayoutParams(
-//                                ViewGroup.LayoutParams.MATCH_PARENT,
-//                                20000
-//                            )
-//                        )
-//                    }
-//                },
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//            )
         },
         modifier = Modifier
-            .nestedScroll(nestedScrollConnection)
+            .fillMaxHeight()
+            .scrollable(
+                state.scrollableState,
+                Orientation.Vertical,
+                state.isScrollEnable,
+                flingBehavior = object : FlingBehavior {
+                    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+                        val remain = with(this) {
+                            with(flingBehavior) {
+                                performFling(initialVelocity)
+                            }
+                        }
+                        if (remain < 0) {
+                            webViewRef.value?.fling(-remain.roundToInt())
+                            return 0f
+                        }
+                        return remain
+                    }
+                }
+            )
+            .nestedScroll(state.nestedScrollConnection)
     ) { measurables, constraints ->
+        check(constraints.hasBoundedHeight)
         val height = constraints.maxHeight
-        val topContent =
-            measurables[0].measure(constraints.copy(maxHeight = Constraints.Infinity))
-        val bottomContent =
+        val topContentPlaceable =
+            measurables[0].measure(constraints.copy(minHeight = 0, maxHeight = Infinity))
+        val bottomContentPlaceable =
             measurables[1].measure(constraints.copy(minHeight = height, maxHeight = height))
-        val width = constraints.constrainWidth(max(topContent.width, bottomContent.width))
-        minOffsetY = -topContent.height
+        val width =
+            constraints.constrainWidth(max(topContentPlaceable.width, bottomContentPlaceable.width))
+        state.minOffsetY = -topContentPlaceable.height
         layout(
             width = width,
             height = height
         ) {
-            topContent.placeRelativeWithLayer(0, offsetY)
-            bottomContent.placeRelativeWithLayer(0, topContent.height + offsetY)
+            topContentPlaceable.placeRelativeWithLayer(0, state.offsetY)
+            bottomContentPlaceable.placeRelativeWithLayer(
+                0,
+                topContentPlaceable.height + state.offsetY
+            )
         }
     }
 }

@@ -312,10 +312,12 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
                         dispatchNestedFling(0, -initialVelocity, true);
                         fling(-initialVelocity);
                     }
-                } else if (mScroller.springBack(getScrollX(), getScrollY(), 0, 0, 0,
-                        getScrollRange())) {
-                    ViewCompat.postInvalidateOnAnimation(getView());
                 }
+//                else if (mScroller.springBack(getScrollX(), getScrollY(), 0, 0, 0,
+//                        getScrollRange())) {
+//                    Log.d("NestedScrollUp", "     springBack: " + mNestedYOffset);
+//                    ViewCompat.postInvalidateOnAnimation(getView());
+//                }
                 mActivePointerId = INVALID_POINTER;
                 endDrag();
                 break;

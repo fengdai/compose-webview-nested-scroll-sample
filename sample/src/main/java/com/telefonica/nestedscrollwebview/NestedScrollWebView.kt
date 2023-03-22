@@ -220,4 +220,8 @@ open class NestedScrollWebView : WebView, NestedScrollingChild3 {
     fun fling(velocityY: Int) {
         nestedScrollingChildHelper.fling(velocityY)
     }
+
+    fun getMaxScrollY(): Int {
+        return computeVerticalScrollRange() - height
+    }
 }

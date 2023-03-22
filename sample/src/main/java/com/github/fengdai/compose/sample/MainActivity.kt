@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -67,7 +69,7 @@ class CommodityState {
     private var _minOffsetYState = mutableStateOf(Int.MIN_VALUE)
     private var accumulator: Float = 0f
 
-    val isScrollEnable get() = offsetY > minOffsetY
+    val reachMinOffsetY by derivedStateOf { offsetY <= minOffsetY }
 
     val scrollableState = ScrollableState {
         val absolute = (offsetY + it + accumulator)
@@ -114,6 +116,48 @@ fun Commodity(
 ) {
     val webViewRef = remember { Ref<NestedScrollWebView>() }
     val flingBehavior = ScrollableDefaults.flingBehavior()
+
+    val scrollableInteractionSource = remember { MutableInteractionSource() }
+    val isDragged by scrollableInteractionSource.collectIsDraggedAsState()
+    fun isScrollableEnabled() = !state.reachMinOffsetY || isDragged
+    val outerNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (isScrollableEnabled()) {
+                    if (available.y > 0) {
+                        webViewRef.value?.run {
+                            val consumedY = available.y
+                                .coerceIn(0f, scrollY.toFloat())
+                            scrollBy(0, -consumedY.roundToInt())
+                            return available.copy(y = consumedY)
+                        }
+                    }
+                }
+                return super.onPreScroll(available, source)
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (isScrollableEnabled()) {
+                    if (available.y < 0) {
+                        webViewRef.value?.run {
+                            val consumedY = available.y
+                                .coerceIn(-(getMaxScrollY() - scrollY).toFloat(), 0f)
+                            scrollBy(0, -consumedY.roundToInt())
+                            return available.copy(y = consumedY)
+                        }
+                    }
+                }
+                return super.onPostScroll(consumed, available, source)
+            }
+        }
+    }
     Layout(
         content = {
             topContent()
@@ -132,10 +176,11 @@ fun Commodity(
         },
         modifier = Modifier
             .fillMaxHeight()
+            .nestedScroll(outerNestedScrollConnection)
             .scrollable(
                 state.scrollableState,
                 Orientation.Vertical,
-                state.isScrollEnable,
+                enabled = isScrollableEnabled(),
                 flingBehavior = object : FlingBehavior {
                     override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
                         val remain = with(this) {
@@ -149,7 +194,8 @@ fun Commodity(
                         }
                         return remain
                     }
-                }
+                },
+                interactionSource = scrollableInteractionSource
             )
             .nestedScroll(state.nestedScrollConnection)
     ) { measurables, constraints ->

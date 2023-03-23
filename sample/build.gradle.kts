@@ -24,7 +24,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.3.0"
+        kotlinCompilerExtensionVersion = "1.4.4"
     }
 
     kotlinOptions {
@@ -57,9 +57,9 @@ android {
 dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.foundation)
-    implementation("androidx.compose.material:material:1.3.1")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.3.3")
-    debugImplementation("androidx.compose.ui:ui-tooling:1.3.3")
+    implementation("androidx.compose.material:material:1.4.0")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.4.0")
+    debugImplementation("androidx.compose.ui:ui-tooling:1.4.0")
     implementation("androidx.core:core-ktx:1.9.0")
 //    implementation("com.telefonica:nestedscrollwebview:0.1.1")
     implementation("com.google.accompanist:accompanist-webview:0.28.0")

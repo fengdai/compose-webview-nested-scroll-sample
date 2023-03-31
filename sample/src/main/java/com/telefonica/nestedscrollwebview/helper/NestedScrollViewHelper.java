@@ -19,10 +19,10 @@ import static android.view.View.OVER_SCROLL_ALWAYS;
 import static android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS;
 import static android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS;
 import static androidx.annotation.RestrictTo.Scope.LIBRARY;
+import static androidx.core.view.ViewCompat.TYPE_NON_TOUCH;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -38,6 +38,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.core.view.NestedScrollingChild3;
 import androidx.core.view.NestedScrollingChildHelper;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.ViewParentCompat;
 import androidx.core.widget.EdgeEffectCompat;
 
 /**
@@ -133,6 +134,8 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
 
     private NestedScrollingChildHelper mChildHelper;
 
+    private ViewParent mNestedScrollingParentNonTouch;
+
     // NestedScrollView constructor
     public void init(@NonNull Context context, @Nullable AttributeSet attrs/*, int defStyleAttr*/) {
         mEdgeGlowTop = EdgeEffectCompat.create(context, attrs);
@@ -209,16 +212,12 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
             case MotionEvent.ACTION_MOVE:
                 final int activePointerIndex = ev.findPointerIndex(mActivePointerId);
                 if (activePointerIndex == -1) {
-                    Log.e(TAG, "Invalid pointerId=" + mActivePointerId + " in onTouchEvent");
                     break;
                 }
 
                 final int y = (int) ev.getY(activePointerIndex);
                 int deltaY = mLastMotionY - y;
-                String upOrDown = deltaY < 0 ? "↓" : "↑";
-                Log.d("NestedScroll", ">> " + upOrDown + " deltaY: " + deltaY + "; mLastMotionY: " + mLastMotionY + "; y: " + y);
                 deltaY -= releaseVerticalGlow(deltaY, ev.getX(activePointerIndex));
-                Log.d("NestedScroll", "     deltaY: " + deltaY);
                 if (!mIsBeingDragged && Math.abs(deltaY) > mTouchSlop) {
                     final ViewParent parent = getParent();
                     if (parent != null) {
@@ -231,23 +230,16 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
                         deltaY += mTouchSlop;
                     }
                 }
-                Log.d("NestedScroll", "     deltaY: " + deltaY);
                 if (mIsBeingDragged) {
                     // Start with nested pre scrolling
-                    Log.d("NestedScroll", "     dispatchNestedPreScroll");
                     if (dispatchNestedPreScroll(0, deltaY, mScrollConsumed, mScrollOffset,
                             ViewCompat.TYPE_TOUCH)) {
                         deltaY -= mScrollConsumed[1];
-                        Log.d("NestedScroll", "     deltaY: " + deltaY + "; -mScrollConsumed[1]: " + mScrollConsumed[1]);
-                        Log.d("NestedScroll", "        mNestedYOffset: " + mNestedYOffset);
-                        Log.d("NestedScroll", "      + mScrollOffset[1]: " + mScrollOffset[1]);
                         mNestedYOffset -= mScrollConsumed[1];
-                        Log.d("NestedScroll", "      = mNestedYOffset: " + mNestedYOffset);
                     }
 
                     // Scroll to follow the motion event
                     mLastMotionY = y + mScrollConsumed[1];
-                    Log.d("NestedScroll", "     deltaY: " + deltaY + "; mLastMotionY: (" + mLastMotionY + ") = y: (" + y + ") -  mScrollOffset[1]: (" + mScrollOffset[1] + ")");
 
                     final int oldY = getScrollY();
                     final int range = getScrollRange();
@@ -271,7 +263,6 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
 
                     mLastMotionY += mScrollConsumed[1];
                     mNestedYOffset -= mScrollConsumed[1];
-                    Log.d("NestedScroll", "     mNestedYOffset: " + mNestedYOffset);
 
                     if (canOverscroll) {
                         deltaY -= mScrollConsumed[1];
@@ -308,16 +299,14 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
                 int initialVelocity = (int) velocityTracker.getYVelocity(mActivePointerId);
                 if ((Math.abs(initialVelocity) >= mMinimumVelocity)) {
                     if (!edgeEffectFling(initialVelocity)
-                            && !dispatchNestedPreFling(0, -initialVelocity)) {
-                        dispatchNestedFling(0, -initialVelocity, true);
+                            && !dispatchNestedPreFling(0, initialVelocity)) {
                         fling(-initialVelocity);
                     }
                 }
-//                else if (mScroller.springBack(getScrollX(), getScrollY(), 0, 0, 0,
-//                        getScrollRange())) {
-//                    Log.d("NestedScrollUp", "     springBack: " + mNestedYOffset);
-//                    ViewCompat.postInvalidateOnAnimation(getView());
-//                }
+                // else if (mScroller.springBack(getScrollX(), getScrollY(), 0, 0, 0,
+                //         getScrollRange())) {
+                //     ViewCompat.postInvalidateOnAnimation(getView());
+                // }
                 mActivePointerId = INVALID_POINTER;
                 endDrag();
                 break;
@@ -399,6 +388,16 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
                     }
                 }
             }
+            if (isNestedScrollingEnabled()) {
+                ViewParent parent = mNestedScrollingParentNonTouch;
+                if (parent != null) {
+                    float currVelocity = mScroller.getCurrVelocity();
+                    if (mScroller.getStartY() > mScroller.getFinalY()) {
+                        currVelocity = -currVelocity;
+                    }
+                    ViewParentCompat.onNestedFling(parent, getView(), 0, currVelocity, false);
+                }
+            }
             abortAnimatedScroll();
         }
 
@@ -415,7 +414,7 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
         }
     }
 
-    private void abortAnimatedScroll() {
+    public void abortAnimatedScroll() {
         mScroller.abortAnimation();
         stopNestedScroll(ViewCompat.TYPE_NON_TOUCH);
     }
@@ -600,11 +599,17 @@ public class NestedScrollViewHelper implements NestedScrollingChild3 {
 
     @Override
     public boolean startNestedScroll(int axes, int type) {
+        if (type == TYPE_NON_TOUCH) {
+            mNestedScrollingParentNonTouch = getParent();
+        }
         return mChildHelper.startNestedScroll(axes, type);
     }
 
     @Override
     public void stopNestedScroll(int type) {
+        if (type == TYPE_NON_TOUCH) {
+            mNestedScrollingParentNonTouch = null;
+        }
         mChildHelper.stopNestedScroll(type);
     }
 

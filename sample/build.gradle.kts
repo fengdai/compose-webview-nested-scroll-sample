@@ -63,4 +63,5 @@ dependencies {
     implementation("androidx.core:core-ktx:1.9.0")
 //    implementation("com.telefonica:nestedscrollwebview:0.1.1")
     implementation("com.google.accompanist:accompanist-webview:0.28.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.0")
 }

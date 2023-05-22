@@ -4,18 +4,14 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.SpringSpec
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.overscroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -34,12 +30,8 @@ import androidx.core.view.ViewCompat
 import com.google.accompanist.web.WebView
 import com.google.accompanist.web.rememberWebViewState
 import com.telefonica.nestedscrollwebview.NestedScrollWebView
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import java.lang.Integer.max
-import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sign
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,8 +152,6 @@ fun Commodity(
     val isDragged by scrollableInteractionSource.collectIsDraggedAsState()
     fun isScrollableEnabled() = state.canScrollForward || isDragged
     val scope = rememberCoroutineScope()
-    // Create the overscroll controller
-    val overscroll = remember(scope) { OffsetOverscrollEffect(scope) }
     val outerNestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(
@@ -198,11 +188,6 @@ fun Commodity(
                 }
                 return super.onPostScroll(consumed, available, source)
             }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                overscroll.applyToFling(available) { Velocity.Zero }
-                return available
-            }
         }
     }
     Layout(
@@ -223,7 +208,6 @@ fun Commodity(
         },
         modifier = Modifier
             .fillMaxHeight()
-            .overscroll(overscroll)
             .nestedScroll(outerNestedScrollConnection)
             .scrollable(
                 state.scrollableState,
@@ -248,7 +232,6 @@ fun Commodity(
                     }
                 },
                 interactionSource = scrollableInteractionSource,
-                overscrollEffect = overscroll,
             )
             .nestedScroll(state.nestedScrollConnection)
     ) { measurables, constraints ->
@@ -271,71 +254,5 @@ fun Commodity(
                 topContentPlaceable.height - state.scrollY
             )
         }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-class OffsetOverscrollEffect(val scope: CoroutineScope) : OverscrollEffect {
-    private val overscrollOffset = Animatable(0f)
-
-    override fun applyToScroll(
-        delta: Offset,
-        source: NestedScrollSource,
-        performScroll: (Offset) -> Offset
-    ): Offset {
-        // in pre scroll we relax the overscroll if needed
-        // relaxation: when we are in progress of the overscroll and user scrolls in the
-        // different direction = substract the overscroll first
-        val sameDirection = sign(delta.y) == sign(overscrollOffset.value)
-        val consumedByPreScroll = if (abs(overscrollOffset.value) > 0.5 && !sameDirection) {
-            val prevOverscrollValue = overscrollOffset.value
-            val newOverscrollValue = overscrollOffset.value + delta.y
-            if (sign(prevOverscrollValue) != sign(newOverscrollValue)) {
-                // sign changed, coerce to start scrolling and exit
-                scope.launch { overscrollOffset.snapTo(0f) }
-                Offset(x = 0f, y = delta.y + prevOverscrollValue)
-            } else {
-                scope.launch {
-                    overscrollOffset.snapTo(overscrollOffset.value + delta.y)
-                }
-                delta.copy(x = 0f)
-            }
-        } else {
-            Offset.Zero
-        }
-        val leftForScroll = delta - consumedByPreScroll
-        val consumedByScroll = performScroll(leftForScroll)
-        val overscrollDelta = leftForScroll - consumedByScroll
-        // if it is a drag, not a fling, add the delta left to our over scroll value
-        if (abs(overscrollDelta.y) > 0.5 && source == NestedScrollSource.Drag) {
-            scope.launch {
-                // multiply by 0.1 for the sake of parallax effect
-                overscrollOffset.snapTo(overscrollOffset.value + overscrollDelta.y * 0.1f)
-            }
-        }
-        return consumedByPreScroll + consumedByScroll
-    }
-
-    override suspend fun applyToFling(
-        velocity: Velocity,
-        performFling: suspend (Velocity) -> Velocity
-    ) {
-        Log.d("Dai", "applyToFling: $velocity")
-        val consumed = performFling(velocity)
-        // when the fling happens - we just gradually animate our overscroll to 0
-        val remaining = velocity - consumed
-        overscrollOffset.animateTo(
-            targetValue = 0f,
-            initialVelocity = remaining.y,
-            animationSpec = spring()
-        )
-    }
-
-    override val isInProgress: Boolean
-        get() = overscrollOffset.value != 0f
-
-    // as we're building an offset modifiers, let's offset of our value we calculated
-    override val effectModifier: Modifier = Modifier.offset {
-        IntOffset(x = 0, y = overscrollOffset.value.roundToInt())
     }
 }
